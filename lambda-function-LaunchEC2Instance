@@ -1,0 +1,56 @@
+import boto3
+import json
+
+def lambda_handler(event, context):
+    ec2_client = boto3.client('ec2', region_name='us-east-1')
+
+    try:
+        # Filtra as AMIs disponíveis na região
+        response = ec2_client.describe_images(
+            Owners=['self'],  # Substitua 'self' por outro owner ID, se necessário
+            Filters=[
+                {'Name': 'state', 'Values': ['available']},
+            ]
+        )
+
+        # Ordena as AMIs por data de criação
+        images = sorted(response['Images'], key=lambda x: x['CreationDate'], reverse=True)
+
+        if not images:
+            raise ValueError("Nenhuma AMI disponível foi encontrada na região us-east-1.")
+
+        # Obtém a AMI mais recente
+        latest_ami_id = images[0]['ImageId']
+        print(f"AMI mais recente encontrada: {latest_ami_id}")
+
+        # Parâmetros da instância
+        instance_type = 't2.micro'  # Ajuste o tipo de instância conforme necessário
+       #key_name = 'your-key-pair'   Substitua pelo nome do seu par de chaves existente
+       #security_group_id = 'sg-0ee9ee5c4e83145fd'  # Substitua pelo seu grupo de segurança
+       #subnet_id = 'subnet-0050a8f8e427a3789'  # Substitua pelo ID da sub-rede desejada
+
+        # Inicia a instância EC2
+        instance_response = ec2_client.run_instances(
+            ImageId=latest_ami_id,
+            InstanceType=instance_type,
+            #KeyName=key_name,
+            MaxCount=1,
+            MinCount=1,
+            #SecurityGroupIds=[security_group_id],
+            #SubnetId=subnet_id
+        )
+
+        instance_id = instance_response['Instances'][0]['InstanceId']
+        print(f"Instância iniciada com sucesso. ID da instância: {instance_id}")
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps(f"Instância iniciada com sucesso. ID: {instance_id}")
+        }
+
+    except Exception as e:
+        print(f"Erro ao iniciar instância: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps(f"Erro: {str(e)}")
+        }
