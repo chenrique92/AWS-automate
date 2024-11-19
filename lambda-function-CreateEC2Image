@@ -1,0 +1,52 @@
+import boto3
+import datetime
+
+def lambda_handler(event, context):
+    ec2 = boto3.client('ec2')
+    
+    # Extrair o ID da instância do evento
+    instance_id = event['detail']['instance-id']
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    
+    # Nome customizado da AMI
+    ami_name = f"Custom-AMI-{instance_id}-{timestamp}"
+    
+    try:
+        # Obter o nome da instância a partir de suas tags (se houver)
+        instance_details = ec2.describe_instances(InstanceIds=[instance_id])
+        tags = instance_details['Reservations'][0]['Instances'][0].get('Tags', [])
+        
+        # Procurar uma tag chamada "Name"
+        instance_name = None
+        for tag in tags:
+            if tag['Key'] == 'Name':
+                instance_name = tag['Value']
+                break
+        
+        # Se encontrar o nome da instância, incluir no nome da AMI
+        if instance_name:
+            ami_name = f"{instance_name}-AMI-{timestamp}"
+        
+        # Criar a AMI com o nome customizado
+        response = ec2.create_image(
+            InstanceId=instance_id,
+            Name=ami_name,
+            Description="Automated AMI created by Lambda",
+            NoReboot=True
+        )
+        
+        ami_id = response['ImageId']
+        print(f"AMI criada com sucesso: {ami_id} com nome {ami_name}")
+        
+    except Exception as e:
+        print(f"Erro ao criar a AMI: {e}")
+        return {
+            'statusCode': 500,
+            'body': f"Erro ao criar a AMI para a instância {instance_id}"
+        }
+
+    return {
+        'statusCode': 200,
+        'ami_id': ami_id,
+        'ami_name': ami_name
+    }
