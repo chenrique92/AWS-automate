@@ -1,0 +1,36 @@
+{
+  "Comment": "Step Function para orquestrar a criação, cópia e lançamento de instância EC2 usando uma AMI",
+  "StartAt": "Criar AMI",
+  "States": {
+    "Criar AMI": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:sa-east-1:339712877610:function:CreateEC2Image",
+      "ResultPath": "$.amiDetails",
+      "Next": "Wait"
+    },
+    "Wait": {
+      "Type": "Wait",
+      "Seconds": 500,
+      "Next": "Copiar AMI"
+    },
+    "Copiar AMI": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:sa-east-1:339712877610:function:CopyAMI",
+      "ResultPath": "$.copiedAmiDetails",
+      "Next": "Finalizar copia",
+      "Parameters": {
+        "ami_id.$": "$.amiDetails.ami_id"
+      }
+    },
+    "Finalizar copia": {
+      "Type": "Wait",
+      "Seconds": 500,
+      "Next": "Lançar Instância"
+    },
+    "Lançar Instância": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:sa-east-1:339712877610:function:LaunchEC2Instance:$LATEST",
+      "End": true
+    }
+  }
+}
