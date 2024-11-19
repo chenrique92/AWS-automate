@@ -1,0 +1,58 @@
+import boto3
+
+# Especifique as regiões de origem e destino aqui
+SOURCE_REGION = "sa-east-1"      # Região de origem
+DESTINATION_REGION = "us-east-1"  # Região de destino
+
+def lambda_handler(event, context):
+    # Cria um cliente EC2 na região de origem
+    ec2_client_source = boto3.client('ec2', region_name=SOURCE_REGION)
+
+    try:
+        # Listar as AMIs na região de origem
+        response = ec2_client_source.describe_images(
+            Owners=['self'],  # Filtra as AMIs da conta do usuário
+            Filters=[
+                {'Name': 'state', 'Values': ['available']},  # Somente AMIs disponíveis
+            ],
+            MaxResults=100  # Limita o número de AMIs retornadas
+        )
+
+        # Verificar se há AMIs disponíveis
+        images = response.get('Images', [])
+        if not images:
+            return {
+                'statusCode': 400,
+                'body': "Nenhuma AMI disponível para cópia na região de origem."
+            }
+
+        # Ordenar as AMIs pela data de criação (descendente)
+        images.sort(key=lambda x: x['CreationDate'], reverse=True)
+
+        # Pegando a AMI mais recente
+        source_image_id = images[0]['ImageId']
+        print(f"AMI mais recente encontrada: {source_image_id}")
+        
+        # Cria um cliente EC2 na região de destino
+        ec2_client_dest = boto3.client('ec2', region_name=DESTINATION_REGION)
+
+        # Realizar a cópia da AMI
+        copy_response = ec2_client_dest.copy_image(
+            SourceImageId=source_image_id,
+            SourceRegion=SOURCE_REGION,
+            Name=f"Copy-of-{source_image_id}"
+        )
+        copied_ami_id = copy_response['ImageId']
+        print(f"AMI copiada com sucesso: {copied_ami_id}")
+
+    except Exception as e:
+        print(f"Erro ao copiar a AMI: {e}")
+        return {
+            'statusCode': 500,
+            'body': f"Erro ao copiar a AMI {source_image_id if 'source_image_id' in locals() else ''}"
+        }
+
+    return {
+        'statusCode': 200,
+        'copied_ami_id': copied_ami_id
+    }
